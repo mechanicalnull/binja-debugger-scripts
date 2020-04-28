@@ -75,6 +75,8 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
 
 
 def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: List[str]) -> Optional[int]:
+    """Return the start of the block after which the two runs diverge or None."""
+
     start_time = time.time()
     path_1 = get_block_path(bv, target_file, args_1)
     duration = time.time() - start_time
@@ -91,7 +93,7 @@ def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: Li
     for i in range(min(len(path_1), len(path_2))):
         if path_1[i] != path_2[i]:
             divergence = path_1[i-1]
-            print('[+] First divergence at %d blocks in:' % i)
+            print('[*] First divergence at %d blocks in:' % i)
             print('    Path 1: 0x%x' % path_1[i])
             print('    Path 2: 0x%x' % path_2[i])
             print('    Shared predecessor block: 0x%x' % path_1[i-1])
@@ -131,6 +133,9 @@ if __name__ == '__main__':
     duration = time.time() - start_time
     print('[*] Analysis finished in %.2f seconds\n' % duration)
 
-    if compare_runs(bv, target_file, args_1, args_2) is None:
+    divergence_point = compare_runs(bv, target_file, args_1, args_2)
+    if divergence_point:
+        print('[+] First divergence point: 0x%x' % divergence_point)
+    else:
         print('[!] No divergence found!')
     print('[*] Done.')
