@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # By mechanicalnull, for funsies
 
@@ -32,7 +31,8 @@ def get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
     for reg_name in pc_names:
         if reg_name in dbg.reg_list():
             return dbg.reg_read(reg_name)
-    raise Exception('[!] No program counter name (%s) found in registers: %s' % (pc_names, dbg.reg_list()))
+    raise Exception('[!] No program counter name (%s) found in registers: %s' %
+                    (pc_names, dbg.reg_list()))
 
 
 def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> List[int]:
@@ -73,16 +73,19 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
 
     return block_path
 
+
 def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: List[str]) -> Optional[int]:
     start_time = time.time()
     path_1 = get_block_path(bv, target_file, args_1)
     duration = time.time() - start_time
-    print('[*] Path 1 (%d blocks) recorded in %.2f seconds' % (len(path_1), duration))
+    print('[*] Path 1 (%d blocks) recorded in %.2f seconds' %
+          (len(path_1), duration))
 
     start_time = time.time()
     path_2 = get_block_path(bv, target_file, args_2)
     duration = time.time() - start_time
-    print('[*] Path 2 (%d blocks) recorded in %.2f seconds' % (len(path_2), duration))
+    print('[*] Path 2 (%d blocks) recorded in %.2f seconds' %
+          (len(path_2), duration))
 
     divergence = None
     for i in range(min(len(path_1), len(path_2))):
@@ -93,6 +96,15 @@ def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: Li
             print('    Path 2: 0x%x' % path_2[i])
             print('    Shared predecessor block: 0x%x' % path_1[i-1])
             break
+
+    # handle cases where the traces are the same until one dies
+    if divergence is None and len(path_1) != len(path_2):
+        if len(path_1) < len(path_2):
+            shorter = path_1
+        else:
+            shorter = path_2
+        divergence = shorter[-1]
+
     return divergence
 
 
