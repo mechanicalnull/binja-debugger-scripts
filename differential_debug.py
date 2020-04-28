@@ -11,7 +11,7 @@ Written for well-behaved targets.
 import os
 import sys
 import time
-from typing import Iterable, List, Set
+from typing import Optional, List
 
 from binaryninja.binaryview import BinaryViewType, BinaryView
 from binaryninja import core_version, core_ui_enabled, user_plugin_path
@@ -53,25 +53,47 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
             breakpoints.add(block.start)
 
     block_path = []
-    last_breakpoint = None
     while True:
         (reason, _) = dbg.go()  # second item in tuple "data" unused
         if reason == DebugAdapter.STOP_REASON.BREAKPOINT:
             stop_addr = get_pc(dbg)
             block_path.append(stop_addr)
-            if last_breakpoint:
-                dbg.breakpoint_set(last_breakpoint)  # TODO: figure out how to handle self-looping blocks 
             dbg.breakpoint_clear(stop_addr)
-            last_breakpoint = stop_addr
+            dbg.step_into()
+            dbg.breakpoint_set(stop_addr)
             #print('DBG: Hit 0x%x' % stop_addr)
 
         elif reason == DebugAdapter.STOP_REASON.PROCESS_EXITED:
             #print('[+] Target exited cleanly')
             break
         else:
-            raise Exception('[!] Unexpected stop reason: %s' % str(reason))
+            print('[!] Unexpected stop reason: %s' % str(reason))
+            break
+    dbg.quit()
 
     return block_path
+
+def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: List[str]) -> Optional[int]:
+    start_time = time.time()
+    path_1 = get_block_path(bv, target_file, args_1)
+    duration = time.time() - start_time
+    print('[*] Path 1 (%d blocks) recorded in %.2f seconds' % (len(path_1), duration))
+
+    start_time = time.time()
+    path_2 = get_block_path(bv, target_file, args_2)
+    duration = time.time() - start_time
+    print('[*] Path 2 (%d blocks) recorded in %.2f seconds' % (len(path_2), duration))
+
+    divergence = None
+    for i in range(min(len(path_1), len(path_2))):
+        if path_1[i] != path_2[i]:
+            divergence = path_1[i-1]
+            print('[+] First divergence at %d blocks in:' % i)
+            print('    Path 1: 0x%x' % path_1[i])
+            print('    Path 2: 0x%x' % path_2[i])
+            print('    Shared predecessor block: 0x%x' % path_1[i-1])
+            break
+    return divergence
 
 
 if __name__ == '__main__':
@@ -97,21 +119,6 @@ if __name__ == '__main__':
     duration = time.time() - start_time
     print('[*] Analysis finished in %.2f seconds\n' % duration)
 
-    start_time = time.time()
-    path_1 = get_block_path(bv, target_file, args_1)
-    duration = time.time() - start_time
-    print('[*] Path 1 (%d blocks) recorded in %.2f seconds' % (len(path_1), duration))
-
-    start_time = time.time()
-    path_2 = get_block_path(bv, target_file, args_2)
-    duration = time.time() - start_time
-    print('[*] Path 2 (%d blocks) recorded in %.2f seconds' % (len(path_2), duration))
-
-    for i in range(min(len(path_1), len(path_2))):
-        if path_1[i] != path_2[i]:
-            print('[+] First departure at %d blocks in:' % i)
-            print('    Path 1: 0x%x' % path_1[i])
-            print('    Path 2: 0x%x' % path_2[i])
-            print('    Shared predecessor block: 0x%x' % path_1[i-1])
-            break
-    print('[*] Done!')
+    if compare_runs(bv, target_file, args_1, args_2) is None:
+        print('[!] No divergence found!')
+    print('[*] Done.')
