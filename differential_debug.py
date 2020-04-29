@@ -4,6 +4,9 @@
 """
 Use differential debugging to find the first divergence between two runs.
 
+Envisioned use case: Detect where one input first causes a difference in
+execution vs another.
+
 Written for well-behaved targets.
 """
 
@@ -21,12 +24,12 @@ if not core_ui_enabled():
 from debugger import DebugAdapter
 
 
-def get_debug_adapter() -> DebugAdapter.DebugAdapter:
+def _get_debug_adapter() -> DebugAdapter.DebugAdapter:
     """Helper to define type and encapsulate this in case of changes."""
     return DebugAdapter.get_adapter_for_current_system()
 
 
-def get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
+def _get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
     pc_names = ['rip', 'eip', 'pc']
     for reg_name in pc_names:
         if reg_name in dbg.reg_list():
@@ -43,7 +46,7 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
     unfriendly things, like read it's own code, overlap blocks, or split
     instructions.
     """
-    dbg = get_debug_adapter()
+    dbg = _get_debug_adapter()
     dbg.exec(target_file, args)
 
     breakpoints = set()
@@ -56,7 +59,7 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
     while True:
         (reason, _) = dbg.go()  # second item in tuple "data" unused
         if reason == DebugAdapter.STOP_REASON.BREAKPOINT:
-            stop_addr = get_pc(dbg)
+            stop_addr = _get_pc(dbg)
             block_path.append(stop_addr)
             dbg.breakpoint_clear(stop_addr)
             dbg.step_into()
@@ -74,7 +77,7 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
     return block_path
 
 
-def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: List[str]) -> Optional[int]:
+def get_first_divergence(bv: BinaryView, target_file: str, args_1: List[str], args_2: List[str]) -> Optional[int]:
     """Return the start of the block after which the two runs diverge or None."""
 
     start_time = time.time()
@@ -112,10 +115,10 @@ def compare_runs(bv: BinaryView, target_file: str, args_1: List[str], args_2: Li
 
 if __name__ == '__main__':
 
-    USAGE = '%s <target_file> [args1] -- [args2]' % sys.argv[0]
-    USAGE += '\nNOTE: the double dash is mandatory for standalone usage'
+    STANDALONE_USAGE = 'USAGE: %s <target_file> [args1] -- [args2]' % sys.argv[0]
+    STANDALONE_USAGE += '\nNOTE: the double dash is mandatory for standalone usage'
     if len(sys.argv) < 3 or '--' not in sys.argv:
-        print(USAGE)
+        print(STANDALONE_USAGE)
         exit(0)
 
     target_file = sys.argv[1]
@@ -133,7 +136,7 @@ if __name__ == '__main__':
     duration = time.time() - start_time
     print('[*] Analysis finished in %.2f seconds\n' % duration)
 
-    divergence_point = compare_runs(bv, target_file, args_1, args_2)
+    divergence_point = get_first_divergence(bv, target_file, args_1, args_2)
     if divergence_point:
         print('[+] First divergence point: 0x%x' % divergence_point)
     else:

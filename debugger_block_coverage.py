@@ -4,6 +4,9 @@
 """
 Demonstrate collecting block coverage via the debugger by setting breakpoints
 at each basic block. Written for well-behaved targets.
+
+Envisioned use case: for use with tools like bncov, when you only need a
+couple of traces quickly or getting DynamoRIO is an issue.
 """
 
 import os
@@ -19,8 +22,6 @@ if not core_ui_enabled():
     sys.path.append(user_plugin_path())
 from debugger import DebugAdapter
 
-USAGE = '%s <target_file> [args]' % sys.argv[0]
-
 
 def write_coverage_file(bv: BinaryView, addresses: Iterable[int], output_filename: str):
     """Save coverage in the simple mod+offset format."""
@@ -31,12 +32,12 @@ def write_coverage_file(bv: BinaryView, addresses: Iterable[int], output_filenam
             f.write("%s+%x\n" % (module_name, addr - module_base))
 
 
-def get_debug_adapter() -> DebugAdapter.DebugAdapter:
+def _get_debug_adapter() -> DebugAdapter.DebugAdapter:
     """Helper to define type and encapsulate this in case of changes."""
     return DebugAdapter.get_adapter_for_current_system()
 
 
-def get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
+def _get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
     pc_names = ['rip', 'eip', 'pc']
     for reg_name in pc_names:
         if reg_name in dbg.reg_list():
@@ -44,15 +45,15 @@ def get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
     raise Exception('[!] No program counter name (%s) found in registers: %s' % (pc_names, dbg.reg_list()))
 
 
-def collect_coverage(bv: BinaryView, target_file: str, args: List[str] = []) -> Set[int]:
-    """Collect coverage via debugger with breakpoints on the start of each basic blocks.
+def get_block_coverage(bv: BinaryView, target_file: str, args: List[str] = []) -> Set[int]:
+    """Collect coverage via debugger with breakpoints on starts of basic blocks.
 
     NOTE: this won't record coverage on addresses not defined as code and
     software breakpoints can potentially cause issues if the target does
     unfriendly things, like read it's own code, overlap blocks, or split
     instructions.
     """
-    dbg = get_debug_adapter()
+    dbg = _get_debug_adapter()
     dbg.exec(target_file, args)
 
     breakpoints = set()
@@ -65,33 +66,39 @@ def collect_coverage(bv: BinaryView, target_file: str, args: List[str] = []) -> 
     while True:
         (reason, _) = dbg.go()  # second item in tuple "data" unused
         if reason == DebugAdapter.STOP_REASON.BREAKPOINT:
-            stop_addr = get_pc(dbg)
+            stop_addr = _get_pc(dbg)
             dbg.breakpoint_clear(stop_addr)
             breakpoints_hit.add(stop_addr)
         elif reason == DebugAdapter.STOP_REASON.PROCESS_EXITED:
             #print('[+] Target exited cleanly')
             break
         else:
-            raise Exception('[!] Unexpected stop reason: %s' % str(reason))
+            print('[!] Unexpected stop reason: %s' % str(reason))
+            break
+    dbg.quit()
 
     return breakpoints_hit
 
 
 def collect_and_save_coverage(bv: BinaryView, output_filename: str, args: List[str] = []) -> bool:
-    """Helpful single-function wrapper to get coverage using the debugger.
+    """Helpful single-function wrapper to get block coverage using the debugger.
 
     Throws exception on errors, returns False if no coverage is found, True on success."""
-    coverage = collect_coverage(bv, bv.file.original_filename, args)
+
+    coverage = get_block_coverage(bv, bv.file.original_filename, args)
     if len(coverage) == 0:
         return False
+
     write_coverage_file(bv, coverage, output_filename)
+
     return True
 
 
 if __name__ == '__main__':
 
+    STANDALONE_USAGE = 'USAGE: %s <target_file> [args]' % sys.argv[0]
     if len(sys.argv) == 1:
-        print(USAGE)
+        print(STANDALONE_USAGE)
         exit(0)
 
     target_file = sys.argv[1]
@@ -107,12 +114,9 @@ if __name__ == '__main__':
     print('[*] Analysis finished in %.2f seconds\n' % duration)
 
     start_time = time.time()
-    blocks_hit = collect_coverage(bv, target_file, args)
+    blocks_hit = get_block_coverage(bv, target_file, args)
     duration = time.time() - start_time
     print('[*] %d blocks covered in %.2f seconds' % (len(blocks_hit), duration))
-    #print('[*] Blocks:')
-    #for addr in blocks_hit:
-    #    print('  0x%x' % addr)
 
     coverage_file = os.path.join(os.path.dirname(__file__), 'example.modcov')
     write_coverage_file(bv, blocks_hit, coverage_file)
