@@ -15,7 +15,7 @@ import time
 from typing import Iterable, List, Set
 
 from binaryninja.binaryview import BinaryViewType, BinaryView
-from binaryninja import core_version, core_ui_enabled, user_plugin_path
+from binaryninja import core_ui_enabled, user_plugin_path
 
 # Add path for debugger import, needed in standalone headless execution
 if not core_ui_enabled():

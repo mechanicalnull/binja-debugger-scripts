@@ -16,7 +16,7 @@ import time
 from typing import Optional, List
 
 from binaryninja.binaryview import BinaryViewType, BinaryView
-from binaryninja import core_version, core_ui_enabled, user_plugin_path
+from binaryninja import core_ui_enabled, user_plugin_path
 
 # Add path for debugger import, needed in standalone headless execution
 if not core_ui_enabled():
@@ -126,8 +126,6 @@ if __name__ == '__main__':
     doubledash_index = remaining_args.index('--')
     args_1 = remaining_args[:doubledash_index]
     args_2 = remaining_args[doubledash_index+1:]
-    print(f'args_1 {args_1}')
-    print(f'args_2 {args_2}')
 
     print('[*] Loading BinaryView of %s' % target_file)
     start_time = time.time()
