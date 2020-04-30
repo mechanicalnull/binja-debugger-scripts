@@ -66,20 +66,20 @@ def read_value(dbg: DebugAdapter.DebugAdapter,
         raise Exception('[!] Must specify at least one of reg or offset arguments')
 
 
-def get_value_at(target_file: str, args: List[str],
+def get_value_at(dbg: DebugAdapter.DebugAdapter,
                  reg: Optional[str], offset: Optional[int],
                  breakpoint_addr: int, breakpoint_times: int=0) -> int:
-    """Run the target to the specified addr and read the requested value.
+    """Run the DebugAdapter to the specified addr and read the requested value.
 
     If only reg is specified, gets the value of that register.
     If only offset is specified, reads a 64-bit int from memory at the address.
     If reg+offset is specified, reads a 64-bit int from memory at [reg+offset]
+
+    Raises exceptions on errors, for example if breakpoint_addr isn't hit or
+    is hit fewer times than specified.
     """
     value_read = None
     times_hit = 0
-
-    dbg = _get_debug_adapter()
-    dbg.exec(target_file, args)
 
     dbg.breakpoint_set(breakpoint_addr)
 
@@ -94,12 +94,12 @@ def get_value_at(target_file: str, args: List[str],
                 times_hit += 1
             else:
                 value_read = read_value(dbg, reg, offset)
+                break
         elif reason == DebugAdapter.STOP_REASON.PROCESS_EXITED:
             break
         else:
             print('[!] Unexpected stop reason: %s' % str(reason))
             break
-    dbg.quit()
 
     if value_read is None:
         if times_hit == 0:
@@ -109,6 +109,26 @@ def get_value_at(target_file: str, args: List[str],
                             (times_hit, breakpoint_times))
 
     return value_read
+
+def get_debuggee_value(target_file: str, args: List[str],
+                       reg: Optional[str], offset: Optional[int],
+                       breakpoint_addr: int, breakpoint_times: int=0) -> int:
+    """Start and run the target to the specified addr and read the requested value.
+
+    If only reg is specified, gets the value of that register.
+    If only offset is specified, reads a 64-bit int from memory at the address.
+    If reg+offset is specified, reads a 64-bit int from memory at [reg+offset]
+
+    Returns value on success, raises Exception otherwise.
+    """
+    dbg = _get_debug_adapter()
+    dbg.exec(target_file, args)
+
+    value = get_value_at(dbg, reg, offset, breakpoint_addr)
+
+    dbg.quit()
+
+    return value
 
 
 if __name__ == '__main__':
@@ -138,7 +158,7 @@ if __name__ == '__main__':
         except ValueError:
             reg = read_target
 
-    value = get_value_at(target_file, args, reg, offset, breakpoint_addr)
+    value = get_debuggee_value(target_file, args, reg, offset, breakpoint_addr)
     print('[+] Value for "%s" @ 0x%x: 0x%x' % (read_target, breakpoint_addr, value))
 
     print('[*] Done.')
