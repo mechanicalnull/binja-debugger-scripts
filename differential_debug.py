@@ -130,7 +130,6 @@ if __name__ == '__main__':
     print('[*] Loading BinaryView of %s' % target_file)
     start_time = time.time()
     bv = BinaryViewType.get_view_of_file(target_file)
-    bv.update_analysis_and_wait()
     duration = time.time() - start_time
     print('[*] Analysis finished in %.2f seconds\n' % duration)
 
