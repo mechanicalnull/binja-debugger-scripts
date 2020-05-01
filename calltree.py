@@ -4,7 +4,8 @@
 """
 Run the target and observe calls to build a call tree.
 
-Envisioned use case: When static analysis doesn't yield a perfect call tree.
+Envisioned use case: When static analysis doesn't yield a perfect call tree or
+a call tree for a specific input is desired.
 
 Written for well-behaved targets.
 """
@@ -12,7 +13,7 @@ Written for well-behaved targets.
 import os
 import sys
 import time
-from typing import Optional, List, Tuple, Set
+from typing import Optional, List, Tuple, Set, Dict
 
 from binaryninja.binaryview import BinaryViewType, BinaryView
 from binaryninja import core_ui_enabled, user_plugin_path
@@ -44,8 +45,8 @@ def _breakpoint_function_starts_and_calls(bv: BinaryView, dbg: DebugAdapter) -> 
         """Rebase addresses from bv to current debuggee's base."""
         return addr - bv.start + dbg.target_base()
 
-    call_breakpoints = {}  # map callsite addrs to function name
-    function_breakpoints = {}  # map function start addrs to function name
+    call_breakpoints: Dict[str, str] = {}  # map callsite addrs to function name
+    function_breakpoints: Dict[str, str] = {}  # map function start addrs to function name
     for func in bv.functions:
         cur_func = func.name
         func_start = rebase(func.start)
@@ -106,8 +107,12 @@ def _check_breakpoints(bv: BinaryView, dbg: DebugAdapter,
     return retval
 
 
-def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> list:
-    """Run target and observe calls/returns to build a call tree.
+def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> Dict[str, Set[str]]:
+    """Run target and observe calls/returns to build a calltree.
+
+    The calltree maps function names {caller: {callees, ...}, ...}
+    Functions that are executed but don't call other functions are represented
+    with their name mapping to an empty set.
 
     Assumes that functions don't overlap.
     """
@@ -117,7 +122,7 @@ def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> list:
     # TODO: attempt rebase of bv instead
     function_breakpoints, call_breakpoints = _breakpoint_function_starts_and_calls(bv, dbg)
 
-    calltree = {}
+    calltree: Dict[str, Set[str]] = {}
     while True:
         (reason, _) = dbg.go()  # second item in tuple "data" unused
         if reason == DebugAdapter.STOP_REASON.BREAKPOINT:
@@ -149,10 +154,12 @@ def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> list:
 
 
 def print_calltree(calldict: dict):
-    """Print a basic tab-indented recursive tree.
+    """Print a space-indented recursive tree.
 
-    A star after a name indicates a function has already been traversed."""
+    An asterisk after a name indicates the function has already been traversed.
+    """
     print('[+] Printing call tree with %d functions:' % len(calldict))
+    # It looks nicer to start from obvious entry points
     default_roots = ['WinMain', 'wWinMain', 'main', 'wmain', '_main', '_start']
     root = None
     for root in default_roots:
@@ -160,19 +167,19 @@ def print_calltree(calldict: dict):
             break
 
     def recursive_print_node(cur_node: str, tree: dict, level: int, seen: set) -> Set[str]:
+        indent = '    '
         if cur_node in seen:
-            print('%s%s*' % ('    ' * level, cur_node))
+            print('%s%s*' % (indent * level, cur_node))
             return seen
-        print('%s%s' % ('    ' * level, cur_node))
+        print('%s%s' % (indent * level, cur_node))
         seen.add(cur_node)
         children = tree.get(cur_node, [])
-        #seen.update(children)
         for child_node in children:
             child_saw = recursive_print_node(child_node, tree, level + 1, seen)
             seen.update(child_saw)
         return seen
 
-    seen = set()
+    seen: Set[str] = set()
     while True:
         keys_left = calldict.keys() - seen
         if keys_left == set():
