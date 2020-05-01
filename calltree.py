@@ -41,15 +41,11 @@ def _get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
 def _breakpoint_function_starts_and_calls(bv: BinaryView, dbg: DebugAdapter) -> Tuple[dict, dict]:
     """Breakpoint functions and callsites, return mappings of addr to func_name."""
 
-    def rebase(addr):
-        """Rebase addresses from bv to current debuggee's base."""
-        return addr - bv.start + dbg.target_base()
-
     call_breakpoints: Dict[str, str] = {}  # map callsite addrs to function name
     function_breakpoints: Dict[str, str] = {}  # map function start addrs to function name
     for func in bv.functions:
         cur_func = func.name
-        func_start = rebase(func.start)
+        func_start = func.start
         if func_start in function_breakpoints:
             old_func = function_breakpoints[func_start]
             raise Exception('[!] Address 0x%x for %s already start for %s' % (func_start, cur_func, old_func))
@@ -57,7 +53,7 @@ def _breakpoint_function_starts_and_calls(bv: BinaryView, dbg: DebugAdapter) -> 
         dbg.breakpoint_set(func_start)
 
         for site in func.call_sites:
-            call_addr = rebase(site.address)
+            call_addr = site.address
             if call_addr in call_breakpoints:
                 old_func = call_breakpoints[call_addr]
                 raise Exception('[!] Address 0x%x in "%s" already found in "%s"' %
@@ -76,10 +72,6 @@ def _check_breakpoints(bv: BinaryView, dbg: DebugAdapter,
     Returns [] otherwise.
     """
 
-    def unbase(addr):
-        """Rebase addresses from current debuggee to bv."""
-        return addr - dbg.target_base() + bv.start
-
     retval = []
 
     if addr in function_breakpoints:
@@ -90,9 +82,9 @@ def _check_breakpoints(bv: BinaryView, dbg: DebugAdapter,
     if addr in call_breakpoints:
         cur_func = call_breakpoints[addr]
         call_target = _get_pc(dbg)
-        target_func_obj = bv.get_function_at(unbase(call_target))
+        target_func_obj = bv.get_function_at(call_target)
         if target_func_obj is None:
-            offset = unbase(call_target)
+            offset = call_target
             if bv.is_valid_offset(offset):
                 print('[!] Unknown function at offset 0x%x' % offset)
                 target_func = "UNK_%x" % offset
@@ -119,7 +111,9 @@ def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> Dict[str,
     dbg = _get_debug_adapter()
     dbg.exec(target_file, args)
 
-    # TODO: attempt rebase of bv instead
+    bv = bv.rebase(dbg.target_base())  # rebase for current debuggee
+    bv.update_analysis_and_wait()  # required after rebase for callsite analysis
+
     function_breakpoints, call_breakpoints = _breakpoint_function_starts_and_calls(bv, dbg)
 
     calltree: Dict[str, Set[str]] = {}
@@ -185,7 +179,7 @@ def print_calltree(calldict: dict):
         if keys_left == set():
             break
         if root is None:
-            # pick remaining node with most children
+            # pick remaining node with most immediate children
             root = sorted(keys_left, key=lambda k: len(calldict[k]), reverse=True)[0]
         nodes_traversed = recursive_print_node(root, calldict, 0, seen)
         seen.update(nodes_traversed)
