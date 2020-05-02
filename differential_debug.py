@@ -38,6 +38,17 @@ def _get_pc(dbg: DebugAdapter.DebugAdapter) -> int:
                     (pc_names, dbg.reg_list()))
 
 
+def _rebase_bv(bv: BinaryView, dbg: DebugAdapter.DebugAdapter) -> BinaryView:
+    """Get a rebased BinaryView for support of ASLR compatible binaries."""
+    new_base = dbg.target_base()
+    new_bv = bv.rebase(new_base)
+    if new_bv is None:
+        return bv
+    print('[*] Rebasing bv from 0x%x to 0x%x' % (bv.start, new_base))
+    new_bv.update_analysis_and_wait()  # required after rebase
+    return new_bv
+
+
 def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> List[int]:
     """Collect the list of basic blocks hit in order.
 
@@ -48,6 +59,8 @@ def get_block_path(bv: BinaryView, target_file: str, args: List[str] = []) -> Li
     """
     dbg = _get_debug_adapter()
     dbg.exec(target_file, args)
+
+    bv = _rebase_bv(bv, dbg)
 
     breakpoints = set()
     for block in bv.basic_blocks:

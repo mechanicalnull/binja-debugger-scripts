@@ -99,6 +99,17 @@ def _check_breakpoints(bv: BinaryView, dbg: DebugAdapter,
     return retval
 
 
+def _rebase_bv(bv: BinaryView, dbg: DebugAdapter.DebugAdapter) -> BinaryView:
+    """Get a rebased BinaryView for support of ASLR compatible binaries."""
+    new_base = dbg.target_base()
+    new_bv = bv.rebase(new_base)
+    if new_bv is None:
+        return bv
+    print('[*] Rebasing bv from 0x%x to 0x%x' % (bv.start, new_base))
+    new_bv.update_analysis_and_wait()  # required after rebase
+    return new_bv
+
+
 def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> Dict[str, Set[str]]:
     """Run target and observe calls/returns to build a calltree.
 
@@ -111,8 +122,7 @@ def get_calltree(bv: BinaryView, target_file: str, args: List[str]) -> Dict[str,
     dbg = _get_debug_adapter()
     dbg.exec(target_file, args)
 
-    bv = bv.rebase(dbg.target_base())  # rebase for current debuggee
-    bv.update_analysis_and_wait()  # required after rebase for callsite analysis
+    bv = _rebase_bv(bv, dbg)
 
     function_breakpoints, call_breakpoints = _breakpoint_function_starts_and_calls(bv, dbg)
 
@@ -168,7 +178,7 @@ def print_calltree(calldict: dict):
         print('%s%s' % (indent * level, cur_node))
         seen.add(cur_node)
         children = tree.get(cur_node, [])
-        for child_node in children:
+        for child_node in sorted(children):
             child_saw = recursive_print_node(child_node, tree, level + 1, seen)
             seen.update(child_saw)
         return seen
