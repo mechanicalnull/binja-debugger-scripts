@@ -50,6 +50,7 @@ def _rebase_if_needed(dbg: DebugAdapter, addr: int) -> int:
         try:
             _ = dbg.mem_read(new_addr, 1)
         except DebugAdapter.GeneralError:
+            dbg.quit()
             raise Exception('[!] Couldn\'t read or rebase address 0x%x (current base: 0x%x)' % (addr, current_base))
         print('[*] Couldn\'t read 0x%x, rebased to 0x%x' % (addr, new_addr))
         addr = new_addr

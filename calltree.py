@@ -103,6 +103,7 @@ def _rebase_bv(bv: BinaryView, dbg: DebugAdapter.DebugAdapter) -> BinaryView:
     """Get a rebased BinaryView for support of ASLR compatible binaries."""
     new_base = dbg.target_base()
     if core_ui_enabled() and new_base != bv.start:
+        dbg.quit()
         raise Exception('[!] Can\'t do necessary rebase in GUI, try headless operation')
 
     new_bv = bv.rebase(new_base)
