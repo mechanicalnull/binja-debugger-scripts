@@ -179,15 +179,15 @@ if __name__ == '__main__':
     reg = None
     offset = None
     if '+' in read_target:
-        reg, offset = read_target.split('+')
-        int_offset = int(offset, 16)
+        reg, offset_str = read_target.split('+')
+        offset = int(offset_str, 16)
     else:
         try:
-            int_offset = int(read_target, 16)
+            offset = int(read_target, 16)
         except ValueError:
             reg = read_target
 
-    value = get_debuggee_value(target_file, args, reg, int_offset, breakpoint_addr)
+    value = get_debuggee_value(target_file, args, reg, offset, breakpoint_addr)
     print('[+] Value for "%s" @ 0x%x: 0x%x' % (read_target, breakpoint_addr, value))
 
     print('[*] Done.')
