@@ -102,8 +102,11 @@ def _check_breakpoints(bv: BinaryView, dbg: DebugAdapter,
 def _rebase_bv(bv: BinaryView, dbg: DebugAdapter.DebugAdapter) -> BinaryView:
     """Get a rebased BinaryView for support of ASLR compatible binaries."""
     new_base = dbg.target_base()
+    if core_ui_enabled() and new_base != bv.start:
+        raise Exception('[!] Can\'t do necessary rebase in GUI, try headless operation')
+
     new_bv = bv.rebase(new_base)
-    if new_bv is None:
+    if new_bv is None:  # None if rebasing is unecessary
         return bv
     print('[*] Rebasing bv from 0x%x to 0x%x' % (bv.start, new_base))
     new_bv.update_analysis_and_wait()  # required after rebase

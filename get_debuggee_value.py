@@ -57,7 +57,7 @@ def _rebase_if_needed(dbg: DebugAdapter, addr: int) -> int:
 
 
 def read_value(dbg: DebugAdapter.DebugAdapter,
-               reg: Optional[str], offset: Optional[int]):
+               reg: Optional[str], offset: Optional[int]) -> Optional[int]:
     """Read the requested value from the debug adapter.
 
     If only reg is specified, gets the value of that register.
@@ -129,6 +129,8 @@ def get_value_at(dbg: DebugAdapter.DebugAdapter,
         elif times_hit < breakpoint_times:
             raise Exception('[!] Only hit breakpoint %d times, requested read after %d' %
                             (times_hit, breakpoint_times))
+        else:
+            raise Exception('[!] Unexpected error: Breakpoint hit but value_read is None')
 
     return value_read
 
@@ -177,14 +179,14 @@ if __name__ == '__main__':
     offset = None
     if '+' in read_target:
         reg, offset = read_target.split('+')
-        offset = int(offset, 16)
+        int_offset = int(offset, 16)
     else:
         try:
-            offset = int(read_target, 16)
+            int_offset = int(read_target, 16)
         except ValueError:
             reg = read_target
 
-    value = get_debuggee_value(target_file, args, reg, offset, breakpoint_addr)
+    value = get_debuggee_value(target_file, args, reg, int_offset, breakpoint_addr)
     print('[+] Value for "%s" @ 0x%x: 0x%x' % (read_target, breakpoint_addr, value))
 
     print('[*] Done.')
